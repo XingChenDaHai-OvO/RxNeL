@@ -1,0 +1,24 @@
+# 构建产物
+bin/
+obj/
+publish/
+publish_new/
+build/
+tools/ncli/node_modules/
+
+# 部署包与临时文件
+relay-netlify-deploy.zip
+perf.txt
+
+# 本地配置（含密码/令牌，绝不提交）
+*.user
+settings.json
+profile.json
+accounts.json
+social.json
+.env
+.env.*
+
+# 例外：截图与图标要进仓库（README 用到）
+!shots/
+!assets/
