@@ -1,0 +1,53 @@
+<Window x:Class="RxNeL.LaunchWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Rx | NeL"
+        Width="440" Height="158"
+        WindowStyle="None"
+        AllowsTransparency="False"
+        Background="{DynamicResource WindowBrush}"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        WindowStartupLocation="CenterOwner">
+
+    <Border Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="14"
+            Padding="22,20,22,18">
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Orientation="Horizontal">
+                <Border Width="30" Height="30" CornerRadius="9" Background="{DynamicResource AccentBrush}">
+                    <TextBlock Text="Rx" FontSize="12" FontWeight="Bold"
+                               Foreground="{DynamicResource AccentTextBrush}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+
+                <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="正在启动 Roblox" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextBrush}" />
+                    <TextBlock x:Name="DetailText" Text="准备中…" FontSize="11"
+                               Foreground="{DynamicResource MutedBrush}" Margin="0,1,0,0" />
+                </StackPanel>
+            </StackPanel>
+
+            <TextBlock x:Name="StatusText" Grid.Row="1" Text="正在连接 Roblox…"
+                       FontSize="12" Foreground="{DynamicResource TextBrush}"
+                       Margin="0,16,0,10" TextTrimming="CharacterEllipsis" />
+
+            <Grid Grid.Row="2">
+                <Border Height="6" CornerRadius="3" Background="{DynamicResource SurfaceAltBrush}" />
+                <Border x:Name="ProgressFill" Height="6" CornerRadius="3" Width="4"
+                        HorizontalAlignment="Left" Background="{DynamicResource AccentBrush}" />
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

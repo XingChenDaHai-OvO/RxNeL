@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <DefineConstants>$(DefineConstants);WPF</DefineConstants>
+    <AssemblyName>RxNeL</AssemblyName>
+    <RootNamespace>RxNeL</RootNamespace>
+    <Version>4.5.0</Version>
+    <FileVersion>4.5.0.0</FileVersion>
+    <Product>Rx | NeL</Product>
+    <AssemblyTitle>Rx | NeL</AssemblyTitle>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <!-- 复用启动器原有业务层（只排除 WinForms 的界面文件） -->
+  <ItemGroup>
+    <Compile Include="..\RbxLite\AppInfo.cs" Link="Shared\AppInfo.cs" />
+    <Compile Include="..\RbxLite\Paths.cs" Link="Shared\Paths.cs" />
+    <Compile Include="..\RbxLite\Logger.cs" Link="Shared\Logger.cs" />
+    <Compile Include="..\RbxLite\Settings.cs" Link="Shared\Settings.cs" />
+    <Compile Include="..\RbxLite\Deployment.cs" Link="Shared\Deployment.cs" />
+    <Compile Include="..\RbxLite\LaunchHandler.cs" Link="Shared\LaunchHandler.cs" />
+    <Compile Include="..\RbxLite\FastFlagManager.cs" Link="Shared\FastFlagManager.cs" />
+    <Compile Include="..\RbxLite\ModManager.cs" Link="Shared\ModManager.cs" />
+    <Compile Include="..\RbxLite\FontModManager.cs" Link="Shared\FontModManager.cs" />
+    <Compile Include="..\RbxLite\GpuPreference.cs" Link="Shared\GpuPreference.cs" />
+    <Compile Include="..\RbxLite\ProtocolRegistrar.cs" Link="Shared\ProtocolRegistrar.cs" />
+    <Compile Include="..\RbxLite\SingleInstance.cs" Link="Shared\SingleInstance.cs" />
+    <Compile Include="..\RbxLite\DiscordRpc.cs" Link="Shared\DiscordRpc.cs" />
+    <Compile Include="..\RbxLite\SingletonBypass.cs" Link="Shared\SingletonBypass.cs" />
+    <Compile Include="..\RbxLite\NativeMethods.cs" Link="Shared\NativeMethods.cs" />
+    <Compile Include="..\RbxLite\UpdateChecker.cs" Link="Shared\UpdateChecker.cs" />
+    <Compile Include="..\RbxLite\ClientPrep.cs" Link="Shared\ClientPrep.cs" />
+    <Compile Include="..\RbxLite\SelfTest.cs" Link="Shared\SelfTest.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="app.ico" />
+  </ItemGroup>
+
+</Project>
