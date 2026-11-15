@@ -1,0 +1,9 @@
+{
+  "name": "rxnel-relay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Rx | NeL 后端中转：把 /auth 与 /rest 转发到 Supabase，供未被墙的域名访问",
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "functions": {
+    "api/[...path].js": {
+      "maxDuration": 20
+    }
+  },
+  "rewrites": [
+    { "source": "/auth/:path*", "destination": "/api/auth/:path*" },
+    { "source": "/rest/:path*", "destination": "/api/rest/:path*" }
+  ]
+}
