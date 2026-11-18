@@ -1,0 +1,33 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>连接 Rx | NeL</title>
+<style>
+  body{margin:0;background:#070b0c;color:#e4f2ec;font:15px/1.6 -apple-system,"Segoe UI",system-ui,sans-serif;
+       padding:32px 20px;display:flex;flex-direction:column;gap:16px;max-width:520px;margin:0 auto}
+  h1{font-size:20px;margin:0}
+  .muted{color:#6e8880;font-size:13px}
+  input{width:100%;background:#111a1c;border:1px solid #1c2a2a;border-radius:10px;color:#e4f2ec;padding:14px;font-size:15px}
+  button{width:100%;border:0;border-radius:12px;padding:15px;font-size:16px;font-weight:600;color:#04150f;background:#35e0a1}
+  code{background:#111a1c;padding:2px 6px;border-radius:6px;font-family:Consolas,monospace}
+</style>
+<h1>连接你的电脑</h1>
+<div class="muted">手机和电脑要连同一个 WiFi。电脑上打开 Rx | NeL → 设置 → 通用 → 开启「手机遥控」，
+那里会显示地址和配对码。</div>
+
+<input id="host" placeholder="192.168.1.10" autocapitalize="off" autocorrect="off">
+<div class="muted">只填 IP 就行，端口 27150 会自动补上。也可以粘整段 <code>http://192.168.1.10:27150/</code></div>
+
+<button id="go">保存并连接</button>
+
+<script>
+  document.getElementById('go').onclick = () => {
+    const v = document.getElementById('host').value.trim();
+    if (!v) return;
+    if (window.Android && window.Android.saveAndOpen) {
+      window.Android.saveAndOpen(v);
+    } else {
+      location.href = (v.startsWith('http') ? v : 'http://' + v);
+    }
+  };
+</script>

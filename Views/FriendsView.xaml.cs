@@ -70,184 +70,72 @@ public partial class FriendsView : UserControl
     private void ApplyRegistrationState()
     {
         var profile = Profile.Current;
+        var cloudReady = Backend.SupabaseClient.Configured && profile.EmailConfirmed && !_skipBackendPrompt;
 
-        var needsBackend = Backend.SupabaseClient.Configured && !profile.EmailConfirmed && !_skipBackendPrompt;
-
-        if (profile.HasAccount && needsBackend)
+        if (cloudReady)
         {
-            // 本机档案存在但没绑定后端：引导补做验证码注册
-            RegisterCard.Visibility = Visibility.Visible;
-            FriendsRoot.Visibility = Visibility.Collapsed;
-            SkipButton.Visibility = Visibility.Visible;
+            RegisterCard.Visibility = Visibility.Collapsed;
+            FriendsRoot.Visibility = Visibility.Visible;
 
-            EmailBox.Text = profile.Email;
-            RobloxNameBox.Text = profile.RobloxUsername;
+            SelfNameText.Text = string.IsNullOrWhiteSpace(profile.DisplayName) ? profile.RobloxUsername : profile.DisplayName;
+            SelfEmailText.Text = Backend.CloudSocial.MyId is { Length: > 0 } id ? id : "（云端 ID 待生成）";
+            SelfText.Text = string.IsNullOrWhiteSpace(profile.RobloxUsername)
+                ? "本机档案"
+                : $"@{profile.RobloxUsername} · ID {profile.UserId}";
 
-            RegisterStatus.Text = "检测到本机档案尚未绑定后端。补做一次验证码注册即可上云；也可以先跳过继续用本机档案。";
+            _ = LoadSelfAvatarAsync(profile);
+            StartSocial(profile);
             return;
         }
 
-        SkipButton.Visibility = Visibility.Collapsed;
+        RegisterCard.Visibility = Visibility.Visible;
+        FriendsRoot.Visibility = Visibility.Collapsed;
 
-        if (!profile.HasAccount)
-        {
-            RegisterCard.Visibility = Visibility.Visible;
-            FriendsRoot.Visibility = Visibility.Collapsed;
+        RobloxNameBox.Text = string.IsNullOrWhiteSpace(profile.RobloxUsername) ? "" : profile.RobloxUsername;
+        SkipButton.Visibility = profile.HasAccount ? Visibility.Visible : Visibility.Collapsed;
 
-            if (Profile.MachineAlreadyRegistered())
-                RegisterStatus.Text = "本机标记为已注册，但资料文件缺失。可以重新绑定一次。";
-
-            return;
-        }
-
-        RegisterCard.Visibility = Visibility.Collapsed;
-        FriendsRoot.Visibility = Visibility.Visible;
-
-        SelfNameText.Text = string.IsNullOrWhiteSpace(profile.DisplayName) ? profile.RobloxUsername : profile.DisplayName;
-        SelfEmailText.Text = profile.Email;
-        SelfText.Text = $"@{profile.RobloxUsername} · ID {profile.UserId}";
-
-        _ = LoadSelfAvatarAsync(profile);
-        StartSocial(profile);
+        RegisterStatus.Text = Backend.SupabaseClient.Configured
+            ? "填 Roblox 用户名，一键开通（不需要邮箱和验证码）"
+            : "后端未配置：仅本机档案可用（设置 → 通用 → 云后端）";
     }
 
     private void ApplyBackendMode()
     {
-        var configured = Backend.SupabaseClient.Configured;
-
-        RegisterButton.Content = configured ? "完成注册" : "验证并注册（仅本机）";
-        SendCodeButton.Visibility = configured ? Visibility.Visible : Visibility.Collapsed;
-        CodePanel.Visibility = configured ? Visibility.Visible : Visibility.Collapsed;
-        PasswordLabel.Text = configured ? "启动器密码（与 Roblox 无关）" : "密码（可选，仅本机保存）";
-        BackendHint.Visibility = configured ? Visibility.Collapsed : Visibility.Visible;
-        QuotaHint.Visibility = configured ? Visibility.Visible : Visibility.Collapsed;
+        // 验证系统已移除：只剩「一键开通」
+        OpenButton.IsEnabled = Backend.SupabaseClient.Configured;
+        OpenButton.Content = Backend.SupabaseClient.Configured ? "一键开通" : "后端未配置";
     }
 
-    private async void SendCode_Click(object sender, RoutedEventArgs e)
+    private async void Open_Click(object sender, RoutedEventArgs e)
     {
-        var email = EmailBox.Text.Trim();
-
-        if (string.IsNullOrWhiteSpace(email))
-        {
-            RegisterStatus.Text = "先填邮箱";
-            return;
-        }
-
-        SendCodeButton.IsEnabled = false;
-        RegisterStatus.Text = "正在发送验证码…";
-
-        try
-        {
-            var result = await Backend.Registration.SendCodeAsync(email);
-
-            RegisterStatus.Text = result.Message;
-
-            if (result.Ok)
-            {
-                SendCodeButton.Content = "重新发送";
-                CodeBox.Focus();
-            }
-        }
-        finally
-        {
-            SendCodeButton.IsEnabled = true;
-        }
-    }
-
-
-    private async void Register_Click(object sender, RoutedEventArgs e)
-    {
-        if (Profile.MachineAlreadyRegistered() && Profile.Current.HasAccount)
-        {
-            RegisterStatus.Text = "本机已经注册过了，一个机器只能注册一次（可先清空再注册）";
-            return;
-        }
-
-        var email = EmailBox.Text.Trim();
         var username = RobloxNameBox.Text.Trim();
-
-        var emailCheck = Profile.ValidateEmail(email);
-
-        if (!emailCheck.Ok)
-        {
-            RegisterStatus.Text = emailCheck.Message;
-            return;
-        }
 
         if (string.IsNullOrWhiteSpace(username))
         {
-            RegisterStatus.Text = "请填 Roblox 用户名";
+            RegisterStatus.Text = "先填 Roblox 用户名";
             return;
         }
 
-        // 配置了后端：验证码换 session → 设置启动器密码 → 绑定 Roblox → 写库
-        if (Backend.SupabaseClient.Configured)
+        OpenButton.IsEnabled = false;
+        RegisterStatus.Text = "正在开通…";
+
+        try
         {
-            var code = CodeBox.Text.Trim();
+            var message = await Backend.CloudSocial.OpenAsync(username);
 
-            if (string.IsNullOrWhiteSpace(code))
-            {
-                RegisterStatus.Text = "先点「发送验证码」，再把邮件里的 6 位数字填进来";
-                return;
-            }
+            RegisterStatus.Text = message;
 
-            RegisterStatus.Text = "正在完成注册…";
-
-            try
-            {
-                var result = await Backend.Registration.CompleteAsync(email, code, username, PasswordBox.Password);
-
-                RegisterStatus.Text = result.Message;
-
-                if (result.Ok)
-                {
-                    PasswordBox.Clear();
-                    CodeBox.Clear();
-                    ApplyRegistrationState();
-                }
-            }
-            catch (Exception ex)
-            {
-                RegisterStatus.Text = $"注册失败：{ex.Message}";
-            }
-
-            return;
+            if (message.StartsWith("已开通", StringComparison.Ordinal))
+                ApplyRegistrationState();
         }
-
-        RegisterStatus.Text = "正在核对 Roblox 账号…";
-
-        var lookup = await RobloxAuth.LookupAsync(username);
-
-        if (!lookup.Exists)
+        catch (Exception ex)
         {
-            RegisterStatus.Text = lookup.Message + "（用户名不通过，无法注册）";
-            return;
+            RegisterStatus.Text = $"开通失败：{ex.Message}";
         }
-
-        RegisterStatus.Text = "正在拉取 Roblox 头像…";
-
-        var avatarUrl = await AvatarClient.GetAvatarUrlAsync(lookup.UserId, 180) ?? "";
-        var bytes = await AvatarClient.GetAvatarBytesAsync(lookup.UserId, 180);
-
-        var profile = new Profile
+        finally
         {
-            Email = email,
-            RobloxUsername = lookup.LoginName ?? username,
-            DisplayName = lookup.DisplayName ?? username,
-            UserId = lookup.UserId,
-            AvatarUrl = avatarUrl,
-            MachineTag = Environment.MachineName
-        };
-
-        profile.Save();
-
-        if (bytes is not null)
-            SelfAvatar.Source = TryDecodeImage(Convert.ToBase64String(bytes));
-
-        RegisterStatus.Text = "注册完成";
-        Logger.Info($"注册完成：{profile.RobloxUsername}（{profile.Email}）");
-
-        ApplyRegistrationState();
+            OpenButton.IsEnabled = true;
+        }
     }
 
     private void Skip_Click(object sender, RoutedEventArgs e)
@@ -258,20 +146,12 @@ public partial class FriendsView : UserControl
 
     private void Reset_Click(object sender, RoutedEventArgs e)
     {
-        var profile = Profile.Current;
-
-        if (!profile.HasAccount)
-        {
-            RegisterStatus.Text = "本机还没有注册记录";
-            return;
-        }
-
-        if (!AppDialog.Confirm(Window.GetWindow(this), "清空注册",
-                $"清空本机注册（{profile.RobloxUsername}）？好友与聊天记录保留，但需要重新绑定才能继续使用。"))
+        if (!AppDialog.Confirm(Window.GetWindow(this), "清空资料",
+                "清空本机注册资料？好友与聊天记录保留，但需要重新开通。"))
             return;
 
         Profile.Reset();
-        RegisterStatus.Text = "已清空，可以重新注册";
+        RegisterStatus.Text = "已清空，可以重新开通";
         ApplyRegistrationState();
     }
 

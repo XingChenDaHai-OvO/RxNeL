@@ -248,6 +248,112 @@ public partial class App : Application
             return true;
         }
 
+        if (args.Any(a => a.Equals("--update-mode", StringComparison.OrdinalIgnoreCase)))
+        {
+            var installed = UpdateChecker.IsInstalled(out var location);
+            Console.WriteLine($"installed={installed} location={location ?? "(绿色版)"}");
+            Console.WriteLine($"local version={UpdateChecker.LocalVersion}");
+            return true;
+        }
+
+        if (args.Any(a => a.Equals("--netdiag", StringComparison.OrdinalIgnoreCase)))
+        {
+            var report = System.Threading.Tasks.Task.Run(() => Diagnostics.NetDiagAsync())
+                .GetAwaiter().GetResult();
+
+            Console.WriteLine(report);
+            return true;
+        }
+
+        var openIndex = Array.FindIndex(args, a => a.Equals("--open", StringComparison.OrdinalIgnoreCase));
+
+        if (openIndex >= 0 && openIndex + 1 < args.Length)
+        {
+            var output = System.Threading.Tasks.Task
+                .Run(() => Backend.CloudSocial.OpenAsync(args[openIndex + 1]))
+                .GetAwaiter().GetResult();
+
+            Console.WriteLine(output);
+            return true;
+        }
+
+        var awIndex = Array.FindIndex(args, a => a.Equals("--appwrite", StringComparison.OrdinalIgnoreCase));
+
+        if (awIndex >= 0 && awIndex + 2 < args.Length)
+        {
+            AppSettings.Current.AppwriteEndpoint = args[awIndex + 1].TrimEnd('/');
+            AppSettings.Current.AppwriteProjectId = args[awIndex + 2];
+            AppSettings.Current.Save();
+
+            Console.WriteLine($"appwrite = {AppSettings.Current.AppwriteEndpoint} (project {AppSettings.Current.AppwriteProjectId})");
+
+            var health = System.Threading.Tasks.Task.Run(async () =>
+            {
+                using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+                using var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get,
+                    AppSettings.Current.AppwriteEndpoint + "/health");
+
+                request.Headers.TryAddWithoutValidation("X-Appwrite-Project", AppSettings.Current.AppwriteProjectId);
+
+                using var response = await http.SendAsync(request);
+                return $"{(int)response.StatusCode} {await response.Content.ReadAsStringAsync()}".Trim();
+            }).GetAwaiter().GetResult();
+
+            Console.WriteLine("health: " + health);
+            return true;
+        }
+
+        var smtpIndex = Array.FindIndex(args, a => a.Equals("--smtp", StringComparison.OrdinalIgnoreCase));
+
+        if (smtpIndex >= 0 && smtpIndex + 7 < args.Length)
+        {
+            var url = args[smtpIndex + 1];
+            var pat = args[smtpIndex + 2];
+            var host = args[smtpIndex + 3];
+            var port = int.Parse(args[smtpIndex + 4]);
+            var user = args[smtpIndex + 5];
+            var pass = args[smtpIndex + 6];
+            var from = args[smtpIndex + 7];
+            var fromName = smtpIndex + 8 < args.Length ? args[smtpIndex + 8] : "Rx | NeL";
+
+            Console.WriteLine(System.Threading.Tasks.Task
+                .Run(() => Backend.BackendSetup.ApplySmtpAsync(url, pat, host, port, user, pass, from, fromName))
+                .GetAwaiter().GetResult());
+
+            return true;
+        }
+
+        var verifyIndex = Array.FindIndex(args, a => a.Equals("--verify", StringComparison.OrdinalIgnoreCase));
+
+        if (verifyIndex >= 0 && verifyIndex + 2 < args.Length)
+        {
+            var email = args[verifyIndex + 1];
+            var input = args[verifyIndex + 2];
+
+            var output = System.Threading.Tasks.Task.Run(async () =>
+            {
+                var client = Backend.SupabaseClient.Current;
+                var isLink = input.Contains("token=", StringComparison.OrdinalIgnoreCase);
+
+                if (!isLink)
+                {
+                    var session = await client.VerifyEmailOtpAsync(email, input.Trim());
+                    return $"otp 验证成功 uid={session.UserId}";
+                }
+
+                var token = System.Text.RegularExpressions.Regex
+                    .Match(input, @"token=([^&]+)").Groups[1].Value;
+
+                token = Uri.UnescapeDataString(token);
+
+                var linked = await client.VerifyEmailOtpAsync(email, token, "signup");
+                return $"链接验证成功 uid={linked.UserId} confirmed={linked.EmailConfirmed}";
+            }).GetAwaiter().GetResult();
+
+            Console.WriteLine(output);
+            return true;
+        }
+
         var regIndex = Array.FindIndex(args, a => a.Equals("--regcheck", StringComparison.OrdinalIgnoreCase));
 
         if (regIndex >= 0 && regIndex + 2 < args.Length)

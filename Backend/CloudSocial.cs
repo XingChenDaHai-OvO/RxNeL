@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using RxNeL.Accounts;
 using RxNeL.Social;
 
 namespace RxNeL.Backend;
@@ -35,7 +36,7 @@ public static class CloudSocial
     public static CloudFriend? Me { get; private set; }
     public static string MyId => Me?.LauncherId ?? "";
 
-    public static bool Ready => SupabaseClient.Configured && Profile.Current.EmailConfirmed;
+    public static bool Ready => SupabaseClient.Configured;
     public static bool SignedIn => _session is not null;
 
     private static string BaseUrl => AppSettings.Current.SupabaseUrl.TrimEnd('/');
@@ -50,25 +51,100 @@ public static class CloudSocial
             request.Headers.TryAddWithoutValidation("x-relay-token", token);
     }
 
+    /// <summary>恢复/建立会话：优先用本地 refresh token，没有就走匿名登录（无需邮箱验证码）。</summary>
     public static async Task<string> SignInAsync()
     {
-        if (!Ready) return "未注册后端账号";
+        if (!SupabaseClient.Configured) return "未配置后端";
 
-        var password = Profile.GetPassword();
-
-        if (string.IsNullOrEmpty(password))
-            return "本机没有保存启动器密码，请重新注册一次";
+        var client = SupabaseClient.Current;
 
         try
         {
-            _session = await SupabaseClient.Current.SignInAsync(Profile.Current.Email, password);
+            var refresh = Profile.GetRefreshToken();
+
+            if (!string.IsNullOrEmpty(refresh))
+            {
+                try
+                {
+                    _session = await client.RefreshAsync(refresh);
+                }
+                catch
+                {
+                    _session = null;
+                }
+            }
+
+            if (_session is null)
+            {
+                _session = await client.SignInAnonymousAsync();
+                Profile.Current.SetRefreshToken(_session.RefreshToken);
+                Profile.Current.BackendUserId = _session.UserId;
+                Profile.Current.EmailConfirmed = true;
+            }
+            else if (!string.IsNullOrEmpty(_session.RefreshToken))
+            {
+                Profile.Current.SetRefreshToken(_session.RefreshToken);
+            }
+
             Me = await LoadMeAsync();
-            return string.IsNullOrEmpty(Me?.LauncherId) ? "已登录（还没有 ID）" : $"已登录：{Me.LauncherId}";
+
+            return string.IsNullOrEmpty(Me?.LauncherId) ? "已登录云端" : $"已登录：{Me.LauncherId}";
         }
         catch (Exception ex)
         {
             return $"登录失败：{ex.Message}";
         }
+    }
+
+    /// <summary>开通云端好友：匿名账号 + 生成 ID + 写资料（不涉及邮箱/验证码）。</summary>
+    public static async Task<string> OpenAsync(string robloxUsername)
+    {
+        if (!SupabaseClient.Configured) return "未配置后端";
+
+        var lookup = await RobloxAuth.LookupAsync(robloxUsername);
+
+        if (!lookup.Exists) return lookup.Message + "（Roblox 用户名不通过）";
+
+        var state = await SignInAsync();
+
+        if (_session is null) return state;
+
+        var avatar = await AvatarClient.GetAvatarUrlAsync(lookup.UserId, 180) ?? "";
+
+        try
+        {
+            await PostAsync("rx_profiles", new
+            {
+                id = _session.UserId,
+                email = $"{_session.UserId[..8]}@anon.local",
+                roblox_username = lookup.LoginName ?? robloxUsername,
+                roblox_id = lookup.UserId,
+                display_name = lookup.DisplayName ?? lookup.LoginName,
+                avatar_url = avatar,
+                machine_id = Registration.MachineId(),
+                launcher_id = NewLauncherId()
+            });
+        }
+        catch (Exception ex)
+        {
+            if (!ex.Message.Contains("23505") && !ex.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase))
+                return $"写资料失败：{ex.Message}";
+        }
+
+        Me = await LoadMeAsync();
+
+        var profile = Profile.Current;
+        profile.Email = $"{_session.UserId[..8]}@anon.local";
+        profile.RobloxUsername = lookup.LoginName ?? robloxUsername;
+        profile.DisplayName = lookup.DisplayName ?? profile.RobloxUsername;
+        profile.UserId = lookup.UserId;
+        profile.AvatarUrl = avatar;
+        profile.BackendUserId = _session.UserId;
+        profile.EmailConfirmed = true;
+        profile.MachineTag = Registration.MachineId();
+        profile.Save();
+
+        return $"已开通：{Me?.LauncherId}";
     }
 
     private static async Task<CloudFriend?> LoadMeAsync()

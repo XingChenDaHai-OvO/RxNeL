@@ -10,8 +10,8 @@
     <DefineConstants>$(DefineConstants);WPF</DefineConstants>
     <AssemblyName>RxNeL</AssemblyName>
     <RootNamespace>RxNeL</RootNamespace>
-    <Version>4.5.0</Version>
-    <FileVersion>4.5.0.0</FileVersion>
+    <Version>4.8.2</Version>
+    <FileVersion>4.8.2.0</FileVersion>
     <Product>Rx | NeL</Product>
     <AssemblyTitle>Rx | NeL</AssemblyTitle>
     <ApplicationManifest>app.manifest</ApplicationManifest>

@@ -104,5 +104,48 @@ public static class BackendSetup
             request.Headers.TryAddWithoutValidation("x-relay-token", token);
     }
 
+    /// <summary>
+    /// 用 Supabase 管理 API 配置自定义 SMTP，并把验证码邮件模板改成 6 位数字。
+    /// 需要 Personal Access Token（sbp_...），只在本次调用里用。
+    /// </summary>
+    public static async Task<string> ApplySmtpAsync(
+        string url, string pat, string host, int port, string user, string pass, string fromEmail, string fromName)
+    {
+        var reference = RefFromUrl(url);
+
+        if (reference is null) return "URL 不是 https://<ref>.supabase.co 形式";
+
+        var payload = new
+        {
+            smtp_host = host,
+            smtp_port = port.ToString(),
+            smtp_user = user,
+            smtp_pass = pass,
+            smtp_sender_name = fromName,
+            smtp_admin_email = fromEmail,
+            rate_limit_email_sent = 60,
+            mailer_otp_length = 6,
+            mailer_otp_exp = 600,
+            mailer_subjects_confirmation = "Rx | NeL 注册验证码",
+            mailer_templates_confirmation_content =
+                "<h2>Rx | NeL 注册验证码</h2><p>你的验证码是：</p>" +
+                "<p style=\"font-size:32px;letter-spacing:6px;font-weight:bold\">{{ .Token }}</p>" +
+                "<p>10 分钟内有效。如果这不是你本人操作，忽略本邮件即可。</p>"
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Patch,
+            $"https://api.supabase.com/v1/projects/{reference}/config/auth");
+
+        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {pat.Trim()}");
+        request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+        using var response = await Http.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        return response.IsSuccessStatusCode
+            ? $"SMTP 已配置：{host}:{port}（发信人 {fromEmail}），验证码模板改为 6 位数字，限流 60/h"
+            : $"配置失败（{(int)response.StatusCode}）：{Trim(body)}";
+    }
+
     private static string Trim(string text) => text.Length > 200 ? text[..200] : text;
 }

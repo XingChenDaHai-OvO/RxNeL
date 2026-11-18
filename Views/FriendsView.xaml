@@ -6,61 +6,27 @@
 
         <!-- 未注册：先绑定邮箱 + Roblox 账号 -->
         <Border x:Name="RegisterCard" Style="{StaticResource Card}" Visibility="Collapsed"
-                VerticalAlignment="Center" HorizontalAlignment="Center" Width="520" Padding="24">
+                VerticalAlignment="Center" HorizontalAlignment="Center" Width="480" Padding="24">
             <StackPanel>
-                <TextBlock Text="注册后才能使用好友功能" FontSize="15" FontWeight="SemiBold"
+                <TextBlock Text="开通好友功能" FontSize="15" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextBrush}" />
                 <TextBlock Style="{StaticResource Muted}" Margin="0,6,0,14"
-                           Text="先收邮箱验证码，再设一个独立密码；Roblox 只用来取用户名/昵称/头像。每台机器只能注册一次。" />
+                           Text="不需要邮箱、不需要验证码。填 Roblox 用户名即可生成你的启动器 ID，好友靠 ID 互相添加。" />
 
-                <TextBlock Text="邮箱" Style="{StaticResource Muted}" Margin="0,0,0,4" />
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBox x:Name="EmailBox" Style="{StaticResource InputBox}" Height="30"
-                             ToolTip="验证码会发到这个邮箱" />
-                    <Button x:Name="SendCodeButton" Grid.Column="1" Content="发送验证码"
-                            Style="{StaticResource GhostButton}" Height="30" MinWidth="104" Margin="8,0,0,0"
-                            Click="SendCode_Click" />
-                </Grid>
-
-                <StackPanel x:Name="CodePanel">
-                    <TextBlock Text="邮箱验证码" Style="{StaticResource Muted}" Margin="0,12,0,4" />
-                    <TextBox x:Name="CodeBox" Style="{StaticResource InputBox}" Height="30"
-                             MaxLength="8" ToolTip="邮件里的 6 位数字" />
-                </StackPanel>
-
-                <TextBlock Text="Roblox 用户名" Style="{StaticResource Muted}" Margin="0,12,0,4" />
+                <TextBlock Text="Roblox 用户名" Style="{StaticResource Muted}" Margin="0,0,0,4" />
                 <TextBox x:Name="RobloxNameBox" Style="{StaticResource InputBox}" Height="30"
                          ToolTip="不是显示名，是 @ 后面那个唯一用户名" />
 
-                <TextBlock x:Name="PasswordLabel" Text="启动器密码（与 Roblox 无关）" Style="{StaticResource Muted}"
-                           Margin="0,12,0,4" />
-                <PasswordBox x:Name="PasswordBox" Style="{StaticResource InputPassword}" Height="30"
-                             ToolTip="至少 6 位；登录和记住你用，不会发给 Roblox" />
-
-                <Button x:Name="RegisterButton" Content="完成注册"
-                        Style="{StaticResource PrimaryButton}" Height="34"
-                        Margin="0,16,0,0" Click="Register_Click" />
+                <Button x:Name="OpenButton" Content="一键开通" Style="{StaticResource PrimaryButton}"
+                        Height="34" Margin="0,16,0,0" Click="Open_Click" />
 
                 <TextBlock x:Name="RegisterStatus" Style="{StaticResource Muted}" Margin="0,12,0,0"
-                           TextWrapping="Wrap" />
-
-                <TextBlock x:Name="BackendHint" Style="{StaticResource Muted}" Margin="0,6,0,0"
-                           FontSize="10" TextWrapping="Wrap"
-                           Text="未配置后端：将只在本机注册（设置 → 通用 → 云后端 可填 Supabase URL + anon key）" />
-
-                <TextBlock x:Name="QuotaHint" Style="{StaticResource Muted}" Margin="0,4,0,0"
-                           FontSize="10" TextWrapping="Wrap"
-                           Text="发信走 Supabase 免费额度：每小时最多 2 封，用完后要等约 1 小时。"
-                           Visibility="Collapsed" />
+                           TextWrapping="Wrap" Text="开通后会得到形如 RX-7K3M2P 的 ID，发给朋友即可互加好友。" />
 
                 <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-                    <TextBlock Style="{StaticResource Muted}" VerticalAlignment="Center"
-                               Text="已注册过想换号？" FontSize="11" />
-                    <Button Content="清空本机注册" Style="{StaticResource GhostButton}" Height="26"
+                    <TextBlock Style="{StaticResource Muted}" VerticalAlignment="Center" FontSize="11"
+                               Text="想重新开通？" />
+                    <Button Content="清空本机资料" Style="{StaticResource GhostButton}" Height="26"
                             FontSize="11" Padding="10,2" Margin="8,0,0,0" Click="Reset_Click" />
                     <Button x:Name="SkipButton" Content="先用本机档案" Style="{StaticResource GhostButton}"
                             Height="26" FontSize="11" Padding="10,2" Margin="8,0,0,0"

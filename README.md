@@ -104,6 +104,228 @@ RxNeL.exe --uitest <目录>           :: 逐页渲染浅色/深色截图
 - **字体预览**：用 `GlyphTypeface` 读取字体文件的族名，再以 `FontFamily(new Uri(path), "./#name")` 加载，
   不需要安装到系统。
 
+## 延迟问题：根因与修复（v4.8.2）
+
+**根因**：启动器把 `roblox-player:` URI 传给客户端时给它加了引号。
+
+URI 里含 `?`、`&`、`=`，旧版 `Quote()` 因此判定"需要引号"：
+
+```csharp
+// 旧：带 ? & = 就加引号
+var needsQuote = value.IndexOfAny(new[] { ' ', '&', '?', '=', '"' }) >= 0;
+```
+
+于是客户端收到的是 `"roblox-player:1+launchmode:play+gameinfo:...` —— 行首多一个 `"`。
+客户端对 URI 的解析因此走了另一条加入路径，**服务器分配跟着变**，表现就是同一张图
+60ms → 990ms。Bloxstrap 是原样不加引号传递的，所以它正常。
+
+修复：只对空格和引号加引号（`IndexOfAny(new[] { ' ', '"' })`），传出去的字节与 Bloxstrap 一致。
+回归测试同步改为断言"不带多余引号"（`SelfTest` 70/70）。
+
+排查过程里顺手加的三个开关仍然保留，以后遇到类似问题可直接切：
+
+| 开关 | 作用 |
+|---|---|
+| 兼容启动参数 | 改用 `-app -t … --placelauncherurl …`（Bloxstrap 另一条形态） |
+| 干净启动 | 完全跳过 FastFlags / 模组 / 字体 / 显卡写入 |
+| 网络诊断（`--netdiag`） | 读最近一局日志：数据中心 / 传输方式 / 服务器 IP / 实测延迟 |
+
+## 延迟排查（v4.8.1）
+
+启动器本身不碰网络：参数只有 `{rawUri}`（原样交给客户端）、channel 固定 `production`、
+不设代理、`ClientAppSettings.json` 实际内容是 `{}`。所以"经过启动器"不会改路由。
+
+真正会变的是三处，`设置 → 通用 → 排查 → 网络诊断` 会把它们直接打出来：
+
+```bat
+> RxNeL.exe --netdiag
+版本目录：version-4ea8e85481e34f46
+FastFlags：{}
+最近一次会话
+  数据中心：414
+  传输方式：RbxTransport        ← UDP，VPN/代理最容易拖垮的就是它
+  服务器：128.116.63.33:55796
+实测延迟（ICMP 不可用时退回 TCP 握手）
+启动链路：{rawUri} / 多开 开 / 代理 无 / 干净启动 关
+```
+
+排查顺序：
+
+1. **看数据中心**：两次启动如果 `DatacenterId` 差很远（比如一次 414 一次 3xx），
+   说明匹配到了不同区域，ping 自然差几十倍——这是 Roblox 匹配，不是启动器。
+2. **UDP 被劣化**：`selectedTransport=RbxTransport` 走 UDP。开着 VPN/代理/TUN 时
+   UDP 常被限速或降级，表现就是 TCP 网站正常、游戏 ping 爆炸。
+3. **本地掉帧放大 ping**：Roblox 性能面板的 ping 含客户端处理时间。启动器常驻时的
+   HUD（1s 刷新）、局域网心跳（3s 广播）、手机遥控（5s 轮询）在弱机上会把这个数字放大。
+
+于是加了两个开关用于 A/B：
+
+- `干净启动`：不写 FastFlags / 模组 / 字体 / 显卡（`ClientPrep` 直接跳过）
+- 关掉 `显示常驻小窗`、`手机遥控`，并把启动器最小化（默认已开 `MinimizeOnLaunch`）
+
+## 手机端（v4.8.0）
+
+桌面启动器是 WPF + Win32（启动 RobloxPlayerBeta、改注册表、DPAPI），**打不了 APK**——
+Android 上这些 API 都不存在，不是打包工具的问题。
+
+所以做了「手机遥控」：同一 WiFi 下用手机浏览器访问电脑上的页面。
+
+### 怎么用
+
+1. 电脑：设置 → 通用 → 勾选「手机遥控」→ 重启启动器
+2. 页面地址：`http://<电脑IP>:27150/`（状态栏会显示，例如 `http://192.168.1.10:27150`）
+3. 手机浏览器打开 → Chrome 菜单「添加到主屏幕」→ 全屏带图标，行为接近 App
+4. 首次点「启动 Roblox」要填配对码（日志和状态栏里会显示 6 位数字）
+
+### 能做什么
+
+| 接口 | 作用 |
+|---|---|
+| `GET /api/status` | 客户端版本、Roblox 是否在跑、多开状态、账号列表 |
+| `POST /api/launch` | 启动 Roblox（需 `X-Pair-Code` 头） |
+| `GET /` | 手机页面（PWA，可添加主屏幕） |
+
+实现：`MobileServer.cs` 用 `TcpListener` 手写极简 HTTP，不依赖 HttpListener（后者需要 URL ACL/管理员权限）。
+
+### 真要 APK
+
+仓库里已备好 `android/`（WebView 壳，Java + Gradle）和 `.github/workflows/android.yml`：
+GitHub Actions 上打 tag 或手动触发 `android-apk` 就会产出 `RxNeL-Companion.apk`（CI 有 Android SDK，
+本机没有——`dl.google.com` 和 `maven.google.com` 在这台机器上都是 000）。
+
+## 安装程序（v4.7.0）
+
+```bat
+dist\RxNeL-Setup-4.7.0.exe
+```
+
+Inno Setup 6 编译，2.3 MB，**不需要管理员权限**（装到 `%LOCALAPPDATA%\Programs\RxNeL`）。
+
+| 安装时做什么 | 说明 |
+|---|---|
+| 复制程序 | `RxNeL.exe` + `README.md` |
+| 开始菜单 | 「Rx | NeL」与卸载入口 |
+| 桌面快捷方式 | 勾选「附加任务」时创建 |
+| 接管协议 | 勾选后写 `HKCU\Software\Classes
+oblox-player`，浏览器点 Play 直接唤起 |
+| 卸载 | Inno 自带 `unins000.exe`，会删文件并清掉协议键（不留死链） |
+
+更新时的行为（v4.7.1 起）：
+
+| 你装的是 | 点「检查启动器更新」会发生什么 |
+|---|---|
+| **安装版**（Setup 装的） | 优先下载 `RxNeL-Setup-*.exe`，静默覆盖安装到原目录（`/VERYSILENT /DIR=<原目录>`）→ 程序、版本号、卸载器一起更新 |
+| **绿色版**（单文件 exe） | 下载新 exe 替换自己并重启（原逻辑） |
+
+判断依据：`HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\{8B1F4C2A-...}_is1` 是否存在。
+自查命令：
+
+```bat
+> RxNeL.exe --update-mode
+installed=True location=C:\Users\you\AppData\Local\Programs\RxNeL\
+local version=4.7.1
+```
+
+发布端要求：GitHub Release 放两个资产——`RxNeL.exe`（绿色版）和 `RxNeL-Setup-x.y.z.exe`（安装包），
+更新逻辑按文件名区分；自定义清单也可以用 `"setupUrl"` 单独指定安装包地址。
+
+静默安装（部署/脚本用）：
+
+```bat
+RxNeL-Setup-4.7.0.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+```
+
+源码脚本：[`installer/RxNeL.iss`](installer/RxNeL.iss)。本机编译：
+
+```bat
+"%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" installer\RxNeL.iss
+```
+
+GitHub Actions 也加了这一步（打 tag 时自动编译安装包并一起上传）。
+
+## 验证系统已移除（v4.7.0）
+
+邮箱验证码、确认链接、启动器密码全部删除。开通好友功能只剩一步：
+
+![开通](shots/tab2-好友-dark.png)
+
+```
+填 Roblox 用户名 → 一键开通 → 得到 RX-XXXXXX
+```
+
+底层用的是 Supabase **匿名登录**（`POST /auth/v1/signup {}`）：每个安装自动获得一个
+稳定用户会话（refresh token 用 DPAPI 存本地），不涉及邮箱、密码、验证码。
+
+| 之前 | 现在 |
+|---|---|
+| 邮箱 → 验证码/链接 → 密码 | 只要 Roblox 用户名 |
+| 免费档 2 封/小时、模板锁死 | 不发信，零等待 |
+| 需要 Appwrite / Mailtrap | 不需要 |
+
+唯一性仍靠 `rx_profiles` 的三条唯一索引；Roblox 用户名仍走公开接口验真（不存在不给开）。
+
+## 备用：Appwrite Cloud（自带发信）
+
+Supabase 免费档锁死了发信（2 封/小时、模板不可改 → 只能发确认链接）。换成 **Appwrite Cloud** 后：
+
+| 项 | Supabase 免费 | Appwrite Cloud 免费 |
+|---|---|---|
+| 发信 | 2 封/小时、模板锁死 | **自带发信**，模板可改 |
+| 验证码 | 只有链接（新用户） | **Email OTP（6 位数字）** |
+| 客户端直连 | `*.supabase.co` 被 SNI 封，必须中转 | `*.cloud.appwrite.io` **实测可达**，不用中转 |
+| 免费额度 | 500MB / 50k MAU | 1 项目，含 Auth + 数据库 + 存储 |
+
+### 配置（2 分钟）
+
+1. https://cloud.appwrite.io 建项目（区域选 Singapore）
+2. 复制 **Endpoint**（`https://sgp.cloud.appwrite.io/v1`）和 **Project ID**
+3. 启动器 → 设置 → 通用 → 云后端：填这两项 → 保存
+   或命令行：`RxNeL.exe --appwrite https://sgp.cloud.appwrite.io/v1 <projectId>`
+4. 数据库里建 `rxnel` 库 + `profiles` 集合（属性见下），权限给 Users
+
+注册流程会变成：填邮箱/密码/Roblox 用户名 → 「注册并发送验证码」→ 收 **6 位数字** → 「完成注册」。
+
+`profiles` 集合需要的属性：
+
+```
+auth_user_id  string  required
+email         string  required
+roblox_username string required
+roblox_id     integer required
+display_name  string
+avatar_url    string
+machine_id    string  required
+```
+
+## 备用：Supabase + 自定义 SMTP
+
+Supabase 免费档的内置发信：每小时 2 封、模板不可改 → 新用户只会收到「确认链接」邮件，
+拿不到 6 位验证码。接一个免费 SMTP 平台就全解开（模板、限流、发信人都能改）。
+
+推荐 **Mailtrap**（免费 4000 封/月、150 封/天、自带 demo 域名、不用买域名）：
+
+```
+Host:     live.smtp.mailtrap.io
+Port:     587
+Username: api
+Password: <Mailtrap API Token>
+From:     noreply@demomailtrap.com
+```
+
+本机一键配置（需要 Supabase PAT，只在这次调用里用）：
+
+```bat
+RxNeL.exe --smtp https://<ref>.supabase.co <sbp_token> ^
+    live.smtp.mailtrap.io 587 api <mailtrap_token> noreply@demomailtrap.com "Rx | NeL"
+```
+
+它会同时做四件事：
+
+1. 写入 SMTP 配置
+2. `rate_limit_email_sent` 提到 60/h
+3. 验证码固定 6 位、10 分钟有效
+4. **把确认邮件模板换成纯 6 位验证码**（`{{ .Token }}`）—— 内置发信时这一步会 400，接了自定义 SMTP 才允许
+
 ## 开源与部署
 
 仓库里已经备好这些，直接推 GitHub 就能开源：

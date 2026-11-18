@@ -21,6 +21,24 @@
                 <CheckBox x:Name="MinimizeCheck" Style="{StaticResource InputCheck}" Content="启动游戏后最小化启动器" />
                 <CheckBox x:Name="AppUpdateCheck" Style="{StaticResource InputCheck}" Content="启动时静默检查启动器更新" />
 
+                <TextBlock Text="排查" Style="{StaticResource Section}" />
+                <CheckBox x:Name="LegacyArgsCheck" Style="{StaticResource InputCheck}"
+                          Content="兼容启动参数（-app -t --placelauncherurl，Bloxstrap 风格；查延迟用）" />
+                <CheckBox x:Name="CleanLaunchCheck" Style="{StaticResource InputCheck}"
+                          Content="干净启动：启动时不写 FastFlags / 模组 / 字体 / 显卡（排查延迟用）" />
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                    <Button Content="网络诊断" Style="{StaticResource GhostButton}" Height="28"
+                            FontSize="11" Padding="12,2" Click="NetDiag_Click" />
+                    <TextBlock x:Name="DiagHint" Style="{StaticResource Muted}" VerticalAlignment="Center"
+                               Margin="10,0,0,0" FontSize="11" Text="读最近的游戏日志：数据中心、服务器 IP、实测延迟" />
+                </StackPanel>
+
+                <TextBlock Text="手机遥控" Style="{StaticResource Section}" />
+                <CheckBox x:Name="MobileCheck" Style="{StaticResource InputCheck}"
+                          Content="允许局域网内手机访问（端口 27150，可看状态并启动 Roblox）" />
+                <TextBlock x:Name="MobileHint" Style="{StaticResource Muted}" Margin="0,4,0,0" FontSize="11"
+                           Text="开启后重启启动器生效；地址形如 http://192.168.x.x:27150" />
+
                 <TextBlock Text="浮窗与热键" Style="{StaticResource Section}" />
                 <CheckBox x:Name="HudCheck" Style="{StaticResource InputCheck}"
                           Content="显示常驻小窗（客户端版本 / 多开 / 账号数 / 运行时长）" />
@@ -37,8 +55,18 @@
                     <TextBlock Text="anon key" Style="{StaticResource Muted}" Width="200" VerticalAlignment="Center" />
                     <PasswordBox x:Name="SupabaseKeyBox" Style="{StaticResource InputPassword}" Width="360" />
                 </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,6">
+                    <TextBlock Text="Appwrite 端点" Style="{StaticResource Muted}" Width="200" VerticalAlignment="Center" />
+                    <TextBox x:Name="AppwriteEndpointBox" Style="{StaticResource InputBox}" Width="360"
+                             ToolTip="https://sgp.cloud.appwrite.io/v1" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                    <TextBlock Text="Appwrite 项目 ID" Style="{StaticResource Muted}" Width="200" VerticalAlignment="Center" />
+                    <TextBox x:Name="AppwriteProjectBox" Style="{StaticResource InputBox}" Width="360" />
+                </StackPanel>
+
                 <TextBlock x:Name="BackendStatus" Style="{StaticResource Muted}" Margin="0,2,0,0"
-                           Text="执行 db/profiles.sql 建表后可启用唯一性约束（邮箱 / Roblox ID / 机器码）" />
+                           Text="配了 Appwrite 就用它的邮箱验证码（自带发信，不用 SMTP）；否则退回 Supabase" />
 
                 <TextBlock Text="网络" Style="{StaticResource Section}" />
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">

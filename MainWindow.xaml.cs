@@ -33,6 +33,7 @@ public partial class MainWindow : Window
     private bool _readyFired;
 
     private HudWindow? _hud;
+    private MobileServer? _mobile;
     private HwndSource? _hotkeySource;
     private const int HotkeyShowMain = 0x9001;
     private const int HotkeyToggleHud = 0x9002;
@@ -89,6 +90,7 @@ public partial class MainWindow : Window
             }
 
             _hud?.Close();
+            _mobile?.Dispose();
         };
     }
 
@@ -317,6 +319,13 @@ public partial class MainWindow : Window
         Ready?.Invoke();
 
         ApplyHudSetting();
+
+        if (AppSettings.Current.MobileRemote)
+        {
+            _mobile = new MobileServer();
+            _mobile.Start();
+            Runtime.Status($"手机遥控：{MobileServer.Url}（配对码 {_mobile.PairCode}）");
+        }
 
         if (!string.IsNullOrWhiteSpace(_initialUri))
             await LaunchUriAsync(_initialUri!);

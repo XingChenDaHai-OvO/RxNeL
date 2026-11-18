@@ -26,6 +26,9 @@ public sealed class Profile
     /// <summary>邮箱是否已通过后端验证。</summary>
     public bool EmailConfirmed { get; set; }
 
+    /// <summary>云端 refresh token（DPAPI 加密），用于免登录恢复会话。</summary>
+    public string RefreshTokenProtected { get; set; } = "";
+
     /// <summary>启动器密码（DPAPI 加密），用于云端自动登录。</summary>
     public string PasswordProtected { get; set; } = "";
 
@@ -33,6 +36,22 @@ public sealed class Profile
     {
         PasswordProtected = string.IsNullOrEmpty(password) ? "" : Accounts.Dpapi.Protect(password);
         Save();
+    }
+
+    public void SetRefreshToken(string token)
+    {
+        RefreshTokenProtected = string.IsNullOrEmpty(token) ? "" : Accounts.Dpapi.Protect(token);
+        Save();
+    }
+
+    public static string? GetRefreshToken()
+    {
+        var value = Current.RefreshTokenProtected;
+
+        if (string.IsNullOrEmpty(value)) return null;
+
+        try { return Accounts.Dpapi.Unprotect(value); }
+        catch { return null; }
     }
 
     public static string? GetPassword()

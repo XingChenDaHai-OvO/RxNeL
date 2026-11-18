@@ -42,10 +42,15 @@ public partial class SettingsView : UserControl
         MinimizeCheck.IsChecked = settings.MinimizeOnLaunch;
         AppUpdateCheck.IsChecked = settings.AutoCheckAppUpdate;
 
+        LegacyArgsCheck.IsChecked = settings.UseLegacyArgs;
+        CleanLaunchCheck.IsChecked = settings.CleanLaunch;
+        MobileCheck.IsChecked = settings.MobileRemote;
         HudCheck.IsChecked = settings.ShowHud;
         HotkeyCheck.IsChecked = settings.EnableHotkeys;
         ProxyBox.Text = settings.ProxyUrl;
         SupabaseUrlBox.Text = settings.SupabaseUrl;
+        AppwriteEndpointBox.Text = settings.AppwriteEndpoint;
+        AppwriteProjectBox.Text = settings.AppwriteProjectId;
         SupabaseKeyBox.Password = settings.SupabaseAnonKey;
         RobloxLocaleBox.Text = settings.RobloxLocale;
         GameLocaleBox.Text = settings.GameLocale;
@@ -107,8 +112,13 @@ public partial class SettingsView : UserControl
         settings.MinimizeOnLaunch = MinimizeCheck.IsChecked == true;
         settings.AutoCheckAppUpdate = AppUpdateCheck.IsChecked == true;
 
+        settings.UseLegacyArgs = LegacyArgsCheck.IsChecked == true;
+        settings.CleanLaunch = CleanLaunchCheck.IsChecked == true;
+        settings.MobileRemote = MobileCheck.IsChecked == true;
         settings.ShowHud = HudCheck.IsChecked == true;
         settings.EnableHotkeys = HotkeyCheck.IsChecked == true;
+        settings.AppwriteEndpoint = AppwriteEndpointBox.Text.Trim().TrimEnd('/');
+        settings.AppwriteProjectId = AppwriteProjectBox.Text.Trim();
         settings.SupabaseUrl = SupabaseUrlBox.Text.Trim().TrimEnd('/');
         settings.SupabaseAnonKey = SupabaseKeyBox.Password.Trim();
         settings.ProxyUrl = ProxyBox.Text.Trim();
@@ -124,12 +134,31 @@ public partial class SettingsView : UserControl
 
         settings.Save();
 
-        BackendStatus.Text = Backend.SupabaseClient.Configured
-            ? "已配置：注册会走 Supabase Auth（邮箱验证 + 唯一约束）"
-            : "未配置：注册只写本机";
+        BackendStatus.Text = Backend.AppwriteClient.Configured
+            ? "已配置 Appwrite：注册走它的邮箱验证码（自带发信）"
+            : Backend.SupabaseClient.Configured
+                ? "已配置 Supabase：注册走它的验证码/链接"
+                : "未配置：注册只写本机";
 
         MainWindow.Instance?.ApplyHudSetting();
         Runtime.Status("设置已保存");
+    }
+
+    private async void NetDiag_Click(object sender, RoutedEventArgs e)
+    {
+        DiagHint.Text = "正在诊断…";
+
+        try
+        {
+            var report = await Diagnostics.NetDiagAsync();
+            DiagHint.Text = "诊断完成";
+
+            AppDialog.Info(Window.GetWindow(this), "网络诊断", report);
+        }
+        catch (Exception ex)
+        {
+            DiagHint.Text = $"诊断失败：{ex.Message}";
+        }
     }
 
     private async void TestProxy_Click(object sender, RoutedEventArgs e)
@@ -145,6 +174,25 @@ public partial class SettingsView : UserControl
         ProxyStatus.Text = result.Reachable
             ? $"网络可用（{AppSettings.Current.ProxyUrl}）：{result.Message}"
             : $"不通：{result.Message}";
+    }
+
+
+    private static async Task<string> DownloadSetupAsync(string url)
+    {
+        System.IO.Directory.CreateDirectory(Paths.UpdateDir);
+
+        var target = System.IO.Path.Combine(Paths.UpdateDir, "RxNeL-Setup.exe");
+
+        if (System.IO.File.Exists(target))
+            System.IO.File.Delete(target);
+
+        using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+        var bytes = await http.GetByteArrayAsync(url);
+
+        await System.IO.File.WriteAllBytesAsync(target, bytes);
+
+        Logger.Info($"安装包已下载：{target}（{bytes.Length} 字节）");
+        return target;
     }
 
     private async void CheckUpdate_Click(object sender, RoutedEventArgs e)
@@ -176,6 +224,20 @@ public partial class SettingsView : UserControl
             if (!AppDialog.Confirm(Window.GetWindow(this), "启动器更新",
                     $"发现新版本 v{info.Version}，现在下载并重启更新？"))
                 return;
+
+            var installed = UpdateChecker.IsInstalled(out var location);
+
+            // 安装版：优先用安装包覆盖安装，版本号/卸载器才会一起更新
+            if (installed && !string.IsNullOrWhiteSpace(info.SetupUrl))
+            {
+                UpdateStatusText.Text = "正在下载安装包…";
+
+                var setupPath = await DownloadSetupAsync(info.SetupUrl);
+
+                UpdateChecker.RunInstaller(setupPath, location);
+                Application.Current.Shutdown();
+                return;
+            }
 
             var path = await UpdateChecker.DownloadAsync(info);
             UpdateChecker.ApplyAndRestart(path);

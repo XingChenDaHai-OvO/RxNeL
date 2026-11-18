@@ -57,6 +57,26 @@ public sealed class SupabaseClient
         return ParseSession(body, email);
     }
 
+    /// <summary>匿名登录：不需要邮箱/密码，返回一个稳定的用户会话。</summary>
+    public async Task<Session> SignInAnonymousAsync()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{_url}/auth/v1/signup")
+        {
+            Content = new StringContent("{}", Encoding.UTF8, "application/json")
+        };
+
+        request.Headers.TryAddWithoutValidation("apikey", _anon);
+        AddRelayToken(request);
+
+        using var response = await Http.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException(Describe(body, (int)response.StatusCode));
+
+        return ParseSession(body);
+    }
+
     public async Task<Session> SignInAsync(string email, string password)
     {
         var body = await PostAuthAsync("token?grant_type=password", new { email, password });
@@ -157,14 +177,20 @@ public sealed class SupabaseClient
             throw new InvalidOperationException(Describe(body, (int)response.StatusCode));
     }
 
-    /// <summary>用验证码换 session（验证成功即视为邮箱已验证）。</summary>
-    public async Task<Session> VerifyEmailOtpAsync(string email, string token)
+    /// <summary>
+    /// 验证邮箱换 session。
+    /// 支持两种 token：邮件里的 6 位数字（type=email），或确认链接里的 hash（type=signup）。
+    /// </summary>
+    public async Task<Session> VerifyEmailOtpAsync(string email, string token, string type = "email")
     {
+        // 6 位码走 {type:email, token}；邮件链接里的 hash 必须用 token_hash
+        object payload = type == "email"
+            ? new { type, email, token }
+            : new { type, token_hash = token };
+
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{_url}/auth/v1/verify")
         {
-            Content = new StringContent(
-                JsonSerializer.Serialize(new { type = "email", email, token }),
-                Encoding.UTF8, "application/json")
+            Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
         };
 
         request.Headers.TryAddWithoutValidation("apikey", _anon);

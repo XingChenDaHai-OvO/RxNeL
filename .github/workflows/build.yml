@@ -28,7 +28,14 @@ jobs:
       - name: Publish single file
         run: dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish
 
+      - name: Build installer (Inno Setup)
+        run: |
+          choco install innosetup --no-progress -y
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\RxNeL.iss
+
       - uses: actions/upload-artifact@v4
         with:
           name: RxNeL-win-x64
-          path: publish/RxNeL.exe
+          path: |
+            publish/RxNeL.exe
+            dist/RxNeL-Setup-*.exe
